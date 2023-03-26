@@ -1,58 +1,33 @@
 import os
-import openai
+import requests
+import replicate
+
+
+zip_path = "goku.zip"
+zip_filename = zip_path.split("/")[-1]
 
 
 def main():
+    # Upload inputs to cloud storage.
+    # You can skip this step if your zip file is already on the internet and accessible over HTTP
+    upload_response = requests.post(
+        "https://dreambooth-api-experimental.replicate.com/v1/upload/" + zip_filename,
+        headers={
+            "Authorization": "Token " + os.environ["REPLICATE_API_TOKEN"]},
+    ).json()
 
-    starting_prompt = """
-    I want you to become my Prompt Creator. Your goal is to help me craft the best possible prompt for my needs. 
-    The prompt will be used by you, ChatGPT. You will follow the following process: 
-    1. Your first response will be to ask me what the prompt should be about. I will provide my answer, 
-    but we will need to improve it through continual iterations by going through the next steps. 
-    2. Based on my input, you will generate 3 sections. 
-    a) Revised prompt (provide your rewritten prompt. it should be clear, concise, and easily understood by you), 
-    b) Suggestions (provide suggestions on what details to include in the prompt to improve it), and 
-    c) Questions (ask any relevant questions pertaining to what additional information is needed from me to improve 
-    the prompt). 
-    3. We will continue this iterative process with me providing additional information to you and you updating the 
-    prompt in the Revised prompt section until it's complete.
-    """
+    with open(zip_path,
+              "rb") as f:
+        requests.put(upload_response["upload_url"],
+                     data=f)
+    zip_url = upload_response["serving_url"]
 
-    # Set up the OpenAI API key
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-
-    # Define campaign inputs as constants
-    objective = "generate awareness of the brand in the target audience"
-    brand = "Ricola"
-    product = "ricola sweets, candies and mint candies to heal sore throat or throat ache, breath mints"
-    target_audience = "swiss population, any age any sex"
-
-    # Define a function to get the response from the OpenAI GPT-3 chat
-    def get_response(prompt):
-        openai_response = openai.Completion.create(
-            engine="davinci",
-            prompt=prompt,
-            temperature=1,
-            max_tokens=50,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0
-        )
-
-        return openai_response.choices[0].text.strip()
-
-    # Generate marketing campaign message
-    message_prompt = f"Generate a marketing campaign message for {product} by {brand} that targets {target_audience} and aims to {objective}."
-    message_response = get_response(message_prompt)
-
-    # Generate slogan
-    slogan_prompt = f"Create a slogan for {product} by {brand} that helps to promote the campaign and increase brand awareness."
-    slogan_response = get_response(slogan_prompt)
-
-    print('------------------------------------------------------------------------------------')
-    print(f"\nMarketing campaign message for {product} by {brand}:\n\n{message_response}\n")
-    print(f"Slogan for {product} by {brand}: {slogan_response}\n")
-
+    # Train the model
+    lora_url = replicate.run(
+        "replicate/lora-training:b2a308762e36ac48d16bfadc03a65493fe6e799f429f7941639a6acec5b276cc",
+        input={"instance_data": zip_url, "task": "style"}
+    )
+    print(1)
 
 if __name__ == "__main__":
     main()
